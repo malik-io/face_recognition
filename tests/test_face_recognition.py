@@ -13,6 +13,28 @@ import unittest
 import os
 import numpy as np
 from click.testing import CliRunner
+import tempfile
+import shutil
+import sys
+import types
+
+# Stub heavy dependencies so the tests can run without installing dlib
+dummy_dlib = types.SimpleNamespace(
+    get_frontal_face_detector=lambda: None,
+    cnn_face_detection_model_v1=lambda *args, **kwargs: None,
+    shape_predictor=lambda *args, **kwargs: None,
+    face_recognition_model_v1=lambda *args, **kwargs: None,
+)
+sys.modules.setdefault('dlib', dummy_dlib)
+sys.modules.setdefault(
+    'face_recognition_models',
+    types.SimpleNamespace(
+        pose_predictor_model_location=lambda: "",
+        pose_predictor_five_point_model_location=lambda: "",
+        cnn_face_detector_model_location=lambda: "",
+        face_recognition_model_location=lambda: "",
+    ),
+)
 
 from face_recognition import api
 from face_recognition import face_recognition_cli
@@ -342,3 +364,18 @@ class Test_face_recognition(unittest.TestCase):
         result = runner.invoke(face_detection_cli.main, args=[image_file, "--model", "cnn"])
         self.assertEqual(result.exit_code, 0)
         self.assertTrue(target_string in result.output)
+
+    def test_image_files_in_folder_extension_filtering(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            valid = os.path.join(tmpdir, "test1.jpg")
+            invalid1 = os.path.join(tmpdir, "test2.jpg.bak")
+            invalid2 = os.path.join(tmpdir, "test3png")
+            open(valid, "w").close()
+            open(invalid1, "w").close()
+            open(invalid2, "w").close()
+
+            res1 = face_recognition_cli.image_files_in_folder(tmpdir)
+            res2 = face_detection_cli.image_files_in_folder(tmpdir)
+
+            self.assertEqual(res1, [valid])
+            self.assertEqual(res2, [valid])
